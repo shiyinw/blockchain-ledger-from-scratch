@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 
-	pb "../protobuf/go"
+	pb "github.com/shiyinw/blockchain-ledger-from-scratch/protobuf/go"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

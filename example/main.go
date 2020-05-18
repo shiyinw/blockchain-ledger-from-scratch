@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
-	
-	pb "../protobuf/go"
+
+	pb "github.com/shiyinw/blockchain-ledger-from-scratch/protobuf/go"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -35,15 +36,24 @@ func (s *server) Deposit(ctx context.Context, in *pb.Request) (*pb.BooleanRespon
 	return &pb.BooleanResponse{Success: true}, nil
 }
 func (s *server) Withdraw(ctx context.Context, in *pb.Request) (*pb.BooleanResponse, error) {
-	loglen++
-	data[in.UserID] -= in.Value
-	return &pb.BooleanResponse{Success: true}, nil
+	// Proj 3-3 integrity constrains
+	if data[in.UserID]>=in.Value{
+		loglen++
+		data[in.UserID] -= in.Value
+		return &pb.BooleanResponse{Success: true}, nil
+	}else{
+		return &pb.BooleanResponse{Success: false}, errors.New("Transaction "+string(in.Value)+" failed with: insufficient balance")
+	}
 }
 func (s *server) Transfer(ctx context.Context, in *pb.TransferRequest) (*pb.BooleanResponse, error) {
-	loglen++
-	data[in.FromID] -= in.Value
-	data[in.ToID] += in.Value
-	return &pb.BooleanResponse{Success: true}, nil
+	if data[in.FromID]>=in.Value{
+		loglen++
+		data[in.FromID] -= in.Value
+		data[in.ToID] += in.Value
+		return &pb.BooleanResponse{Success: true}, nil
+	}else{
+		return &pb.BooleanResponse{Success: false}, errors.New("Transaction "+string(in.Value)+" failed with: insufficient balance")
+	}
 }
 // Interface with test grader
 func (s *server) LogLength(ctx context.Context, in *pb.Null) (*pb.GetResponse, error) {
