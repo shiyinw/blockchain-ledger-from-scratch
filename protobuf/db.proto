@@ -68,6 +68,7 @@ message Transaction {
 	string FromID = 3; // Optional
 	string ToID = 4; // Optional
 	int32 Value = 5;
+	string TransactionID = 6;
 }
 
 message Block {

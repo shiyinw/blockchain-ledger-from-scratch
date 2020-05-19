@@ -392,8 +392,8 @@ type Block struct {
 	XXX_sizecache        int32          `json:"-"`
 }
 
-func (m *Block) Reset()         { *m = Block{} }
-func (m *Block) String() string { return proto.CompactTextString(m) }
+func (m *Block) Reset()         { *m = Block{} }// initialize
+func (m *Block) String() string { return proto.CompactTextString(m) } // write to 1.json files
 func (*Block) ProtoMessage()    {}
 func (*Block) Descriptor() ([]byte, []int) {
 	return fileDescriptor_8817812184a13374, []int{7}

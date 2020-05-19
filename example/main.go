@@ -7,18 +7,36 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"strconv"
 
 	pb "github.com/shiyinw/blockchain-ledger-from-scratch/protobuf/go"
 
+	"github.com/EagleChen/mapmutex"
+	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 const blockSize = 50
+type Dictionary map[string]interface{}
 
 var data = make(map[string]int32)
 var loglen int32
+var fileidx int64 = 1 // store the ledger in [fileidx].json
+var dataDir string // store the blocks
+
+// no two contradictory transactions
+var mutex = mapmutex.NewMapMutex()
+
+// json I/O
+type fileio struct{
+	BlockID int64
+	PrevHash string `default:"00000000"`
+	Transactions []Dictionary
+	Nonce string `default:"00000000"`
+}
+var file fileio = fileio{fileidx, "00000000", []Dictionary{}, "00000000"}
 
 type server struct{}
 // Database Interface 
@@ -26,33 +44,124 @@ func (s *server) Get(ctx context.Context, in *pb.GetRequest) (*pb.GetResponse, e
 	return &pb.GetResponse{Value: data[in.UserID]}, nil
 }
 func (s *server) Put(ctx context.Context, in *pb.Request) (*pb.BooleanResponse, error) {
+	mutex.TryLock(in.UserID)
+	defer mutex.Unlock(in.UserID)
 	loglen++
 	data[in.UserID] = in.Value
+	// Json I/O
+	var userid, err3 = uuid.NewUUID()
+	if err3!=nil{
+		return &pb.BooleanResponse{Success: false}, err3
+	}
+	entry := Dictionary{"Type":"PUT", "UserID":in.UserID, "Value":in.Value, "TransactionID":userid}
+	file.Transactions = append(file.Transactions, entry)
+	data, err1 := json.Marshal(file)
+	if err1!=nil{
+		return &pb.BooleanResponse{Success: false}, err1
+	}
+	err2 := ioutil.WriteFile(dataDir+strconv.FormatInt(fileidx, 10)+".json", data, 0644)
+	if err2!=nil{
+		return &pb.BooleanResponse{Success: false}, err2
+	}
+	if loglen % blockSize == 0{
+		fileidx++
+		file.BlockID = fileidx
+		file.Transactions = []Dictionary{}
+	}
 	return &pb.BooleanResponse{Success: true}, nil
 }
 func (s *server) Deposit(ctx context.Context, in *pb.Request) (*pb.BooleanResponse, error) {
+	mutex.TryLock(in.UserID)
+	defer mutex.Unlock(in.UserID)
 	loglen++
 	data[in.UserID] += in.Value
+	// Json I/O
+	var userid, err3 = uuid.NewUUID()
+	if err3!=nil{
+		return &pb.BooleanResponse{Success: false}, err3
+	}
+	entry := Dictionary{"Type":"DEPOSIT", "UserID":in.UserID, "Value":in.Value, "TransactionID":userid}
+	file.Transactions = append(file.Transactions, entry)
+	data, err1 := json.Marshal(file)
+	if err1!=nil{
+		return &pb.BooleanResponse{Success: false}, err1
+	}
+	err2 := ioutil.WriteFile(dataDir+strconv.FormatInt(fileidx, 10)+".json", data, 0644)
+	if err2!=nil{
+		return &pb.BooleanResponse{Success: false}, err2
+	}
+	if loglen % blockSize == 0{
+		fileidx++
+		file.BlockID = fileidx
+		file.Transactions = []Dictionary{}
+	}
 	return &pb.BooleanResponse{Success: true}, nil
 }
 func (s *server) Withdraw(ctx context.Context, in *pb.Request) (*pb.BooleanResponse, error) {
+	mutex.TryLock(in.UserID)
+	defer mutex.Unlock(in.UserID)
 	// Proj 3-3 integrity constrains
+	var userid, err3 = uuid.NewUUID()
+	if err3!=nil{
+		return &pb.BooleanResponse{Success: false}, err3
+	}
 	if data[in.UserID]>=in.Value{
 		loglen++
 		data[in.UserID] -= in.Value
+		// Json I/O
+		entry := Dictionary{"Type":"WITHDRAW", "UserID":in.UserID, "Value":in.Value, "TransactionID":userid}
+		file.Transactions = append(file.Transactions, entry)
+		data, err1 := json.Marshal(file)
+		if err1!=nil{
+			return &pb.BooleanResponse{Success: false}, err1
+		}
+		err2 := ioutil.WriteFile(dataDir+strconv.FormatInt(fileidx, 10)+".json", data, 0644)
+		if err2!=nil{
+			return &pb.BooleanResponse{Success: false}, err2
+		}
+		if loglen % blockSize == 0{
+			fileidx++
+			file.BlockID = fileidx
+			file.Transactions = []Dictionary{}
+		}
 		return &pb.BooleanResponse{Success: true}, nil
 	}else{
-		return &pb.BooleanResponse{Success: false}, errors.New("Transaction "+string(in.Value)+" failed with: insufficient balance")
+		return &pb.BooleanResponse{Success: false}, errors.New("Transaction ["+userid.String()+"] "+strconv.FormatInt(int64(in.Value), 10)+" failed with: insufficient balance")
 	}
 }
 func (s *server) Transfer(ctx context.Context, in *pb.TransferRequest) (*pb.BooleanResponse, error) {
+	mutex.TryLock(in.FromID)
+	mutex.TryLock(in.ToID)
+	defer mutex.Unlock(in.FromID)
+	defer mutex.Unlock(in.ToID)
+	// Proj 3-3 integrity constrains
+	var userid, err3 = uuid.NewUUID()
+	if err3!=nil{
+		return &pb.BooleanResponse{Success: false}, err3
+	}
 	if data[in.FromID]>=in.Value{
 		loglen++
 		data[in.FromID] -= in.Value
 		data[in.ToID] += in.Value
+		// Json I/O
+		entry := Dictionary{"Type":"TRANSFER", "FromID":in.FromID, "ToID":in.ToID, "Value":in.Value, "TransactionID":userid}
+		file.Transactions = append(file.Transactions, entry)
+		data, err1 := json.Marshal(file)
+		if err1!=nil{
+			return &pb.BooleanResponse{Success: false}, err1
+		}
+		err2 := ioutil.WriteFile(dataDir+strconv.FormatInt(fileidx, 10)+".json", data, 0644)
+		if err2!=nil{
+			return &pb.BooleanResponse{Success: false}, err2
+		}
+		if loglen % blockSize == 0{
+			fileidx++
+			file.BlockID = fileidx
+			file.Transactions = []Dictionary{}
+		}
 		return &pb.BooleanResponse{Success: true}, nil
 	}else{
-		return &pb.BooleanResponse{Success: false}, errors.New("Transaction "+string(in.Value)+" failed with: insufficient balance")
+		return &pb.BooleanResponse{Success: false}, errors.New("Transaction ["+userid.String()+"] "+strconv.FormatInt(int64(in.Value), 10)+" failed with: insufficient balance")
 	}
 }
 // Interface with test grader
@@ -77,7 +186,7 @@ func main() {
 		return fmt.Sprintf("%s:%s", dat["ip"], dat["port"]), fmt.Sprintf("%s",dat["dataDir"])
 	}()
 	// Unused variable
-	_=outputDir
+	dataDir=outputDir
 
 	// Bind to port
 	lis, err := net.Listen("tcp", address)
