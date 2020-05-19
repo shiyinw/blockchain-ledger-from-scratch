@@ -1,6 +1,8 @@
 # Project 3: Blockchain Ledger
 **Shiyin Wang, Yixiang Zhang, Rui Lu**  (2020 Spring Tsinghua Operating Systems Group Project)
 
+[GitHub Repo](https://github.com/shiyinw/blockchain-ledger-from-scratch/) https://github.com/shiyinw/blockchain-ledger-from-scratch/
+
 We start to work on some problems related to transactions on Distributed Systems. In project 3, we will first enable durability across crash failures on a single machine.
 
 In this project, we build a key-value ledger (ledger is a database that stores monetary transactions) that commits data to the disk and can recover after a crash failure by reading from the disk. Specifically, the ledger we will build here will not only store the final states of each account, but all the transactions in the ledger, in a log format. Sometimes, people refer to these transaction logs as a ``block chain’’ (of course, block chains have more security guarantees, as we will see from the next project). In this project, we only use a single server implementation, assuming the disk files are durable (i.e. disks never fail).
@@ -53,8 +55,61 @@ func (s *server) Transfer(ctx context.Context, in *pb.TransferRequest) (*pb.Bool
 ```
 Let's take `TRANSFER` for example. We assign a lock to each user to constrain that only one thread can edit the balance of a certain user. And we use the `defer` syntax to unlock. We assign a unique Transaction ID to each transaction by package `github.com/google/uuid`. After that, we use a `if` statement to constrain integrity(negative balance is illegal) and write the transaction log into the `$ID.json` blocks. Finally, if the number of logs in the current block reaches the limit, we initialize a new block.
 
-
 ### 2. (20%, 20 lines) Persistence through server crash
+
+We insert the recovery script in `main.go` after reading the config. The `dataDir` in `config.json` define the directory to store blocks. We first check whether this directory exists.
+
+```go
+// Unused variable
+dataDir = outputDir
+if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+  os.Mkdir(outputDir, 0777)
+}
+```
+
+Then we recursively load the content of each block to process the transactions. Since the professor and TAs have confirmed in the course group chat that we assume the blocks are all correct, we don't need to bother the constrains here.
+
+```go
+
+// Recover
+log.Print("Retrieving data from blocks......")
+files, err := ioutil.ReadDir(dataDir)
+if err != nil {
+  log.Fatal(err)
+}
+for i := 1; i <= len(files); i++ {
+  fileidx = int64(i)
+  var cached_string, _ = ioutil.ReadFile(dataDir + strconv.Itoa(i) + ".json")
+  json.Unmarshal(cached_string, &file)
+  for _, tran := range file.Transactions {
+    loglen++
+    switch tran["Type"] {
+      default:
+      log.Fatal("Unknown operation.")
+      case "PUT":
+      data[tran["UserID"].(string)] = int32(tran["Value"].(float64))
+      case "DEPOSIT":
+      data[tran["UserID"].(string)] += int32(tran["Value"].(float64))
+      case "WITHDRAW":
+      data[tran["UserID"].(string)] -= int32(tran["Value"].(float64))
+      case "TRANSFER":
+      data[tran["FromID"].(string)] -= int32(tran["Value"].(float64))
+      data[tran["ToID"].(string)] += int32(tran["Value"].(float64))
+    }
+  }
+}
+```
+
+After loading the transactions, we check whether number of logs in the current block reaches the limit, which is the same as the previous task.
+
+```go
+if loglen % blockSize == 0{
+  fileidx++
+  file.BlockID = fileidx
+  file.Transactions = []Dictionary{}
+}
+log.Print(loglen)
+```
 
 ### 3. (15%, 20 lines) Integrity constrains
 This task involves two actions in the system: Withdraw and Transfer. Whenever we want to reduce the amount of money from a user, we need to check his/her balance first. The implementation is simple.
@@ -106,6 +161,13 @@ You can simply use the `compile.sh` and `start.sh`, which are provided in the sk
 ```bash
 ./compile.sh
 ./start.sh
+```
+
+If you want to make a clean start(ignore all the previous blocks), then you need to delete all the blocks in the `dataDir`:
+
+```bash
+cd tmp
+rm -rf *
 ```
 
 ### 6. (20%, you decide how long it is.) Test cases.

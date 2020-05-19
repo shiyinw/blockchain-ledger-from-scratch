@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strconv"
 
 	pb "github.com/shiyinw/blockchain-ledger-from-scratch/protobuf/go"
@@ -183,10 +184,46 @@ func main() {
 			panic(err)
 		}
 		dat = dat["1"].(map[string]interface{}) // should be dat[myNum] in the future
-		return fmt.Sprintf("%s:%s", dat["ip"], dat["port"]), fmt.Sprintf("%s",dat["dataDir"])
+		return fmt.Sprintf("%s:%s", dat["ip"], dat["port"]), fmt.Sprintf("%s", dat["dataDir"])
 	}()
 	// Unused variable
-	dataDir=outputDir
+	dataDir = outputDir
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		os.Mkdir(outputDir, 0777)
+	}
+	// Recover
+	log.Print("Retrieving data from blocks......")
+	files, err := ioutil.ReadDir(dataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := 1; i <= len(files); i++ {
+		fileidx = int64(i)
+		var cached_string, _ = ioutil.ReadFile(dataDir + strconv.Itoa(i) + ".json")
+		json.Unmarshal(cached_string, &file)
+		for _, tran := range file.Transactions {
+			loglen++
+			switch tran["Type"] {
+			default:
+				log.Fatal("Unknown operation.")
+			case "PUT":
+				data[tran["UserID"].(string)] = int32(tran["Value"].(float64))
+			case "DEPOSIT":
+				data[tran["UserID"].(string)] += int32(tran["Value"].(float64))
+			case "WITHDRAW":
+				data[tran["UserID"].(string)] -= int32(tran["Value"].(float64))
+			case "TRANSFER":
+				data[tran["FromID"].(string)] -= int32(tran["Value"].(float64))
+				data[tran["ToID"].(string)] += int32(tran["Value"].(float64))
+			}
+		}
+	}
+	if loglen % blockSize == 0{
+		fileidx++
+		file.BlockID = fileidx
+		file.Transactions = []Dictionary{}
+	}
+	log.Print(loglen)
 
 	// Bind to port
 	lis, err := net.Listen("tcp", address)
