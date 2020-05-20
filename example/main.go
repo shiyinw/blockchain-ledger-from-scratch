@@ -58,6 +58,7 @@ func (s *server) Put(ctx context.Context, in *pb.Request) (*pb.BooleanResponse, 
 		return &pb.BooleanResponse{Success: false}, err2
 	}
 	if loglen % blockSize == 0{
+		loglen = 0
 		fileidx++
 		file.BlockID = fileidx
 		file.Transactions = []Dictionary{}
@@ -80,6 +81,7 @@ func (s *server) Deposit(ctx context.Context, in *pb.Request) (*pb.BooleanRespon
 		return &pb.BooleanResponse{Success: false}, err2
 	}
 	if loglen % blockSize == 0 {
+		loglen = 0
 		fileidx++
 		file.BlockID = fileidx
 		file.Transactions = []Dictionary{}
@@ -111,6 +113,7 @@ func (s *server) Withdraw(ctx context.Context, in *pb.Request) (*pb.BooleanRespo
 				return &pb.BooleanResponse{Success: false}, err2
 			}
 			if loglen%blockSize == 0 {
+				loglen = 0
 				fileidx++
 				file.BlockID = fileidx
 				file.Transactions = []Dictionary{}
@@ -152,6 +155,7 @@ func (s *server) Transfer(ctx context.Context, in *pb.TransferRequest) (*pb.Bool
 				return &pb.BooleanResponse{Success: false}, err2
 			}
 			if loglen%blockSize == 0 {
+				loglen = 0
 				fileidx++
 				file.BlockID = fileidx
 				file.Transactions = []Dictionary{}
@@ -218,6 +222,7 @@ func main() {
 		}
 	}
 	if loglen > 0 && loglen % blockSize == 0{
+		loglen = 0
 		fileidx++
 		file.BlockID = fileidx
 		file.Transactions = []Dictionary{}
