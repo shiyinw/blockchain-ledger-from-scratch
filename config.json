@@ -1,8 +1,9 @@
+
 {
 	"1":{
 		"ip":"127.0.0.1",
-		"port":"50055",
-		"dataDir":"tmp/"
+		"port":"50051",
+		"dataDir":"/tmp/test_5/"
 	},
 	"nservers":1
 }
